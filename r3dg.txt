@@ -1,0 +1,43 @@
+2udP8/rXfn4b
+
+
+https://box.nju.edu.cn/f/f0b094cc22bf4934a000/?dl=1
+
+https://ghp.ci/https://github.com/NVlabs/nvdiffrast
+
+
+#Evaluating
+#Novel View Synthesis:
+python eval_nvs.py --eval -m output/tnt/Barn/3dgs -c output/tnt/Barn/3dgs/chkpnt30000.pth
+python eval_nvs.py --eval -m output/tnt/Barn/neilf -c output/tnt/Barn/neilf/chkpnt50000.pth -t neilf
+
+#Religlhting
+## produced black frames
+python relighting.py -co configs/tnt -e "env_map/teaser.hdr" --output "output/relighting/teaser_trace" --sample 384
+
+#Video
+## produced black video
+python relighting.py -e env_map/composition.hdr -co configs/tnt --output "output/relighting/tnt" --sample_num 384 --video 
+
+## produced black video
+python relighting.py -co configs/tnt -e "env_map/composition.hdr" --output "output/relighting/tnt_light" --sample_num 384 --video 
+
+### this one works
+python relighting.py -co configs/tnt -e "env_map/ocean_from_horn.jpg" --output "output/relighting/tnt_2" --sample_num 384 --video
+
+### this one works
+python relighting.py -co configs/tnt -e "env_map/envmap6.exr" --output "output/relighting/tnt_envmap6" --sample_num 384 --video
+
+### this one works
+python relighting.py -co configs/tnt -e "env_map/envmap3.png" --output "output/relighting/tnt_envmap3" --sample_num 384 --video
+
+
+
+GUI
+### this one works
+# for 3D Gaussian
+python gui.py -m output/tnt/Barn/3dgs -t render 
+
+### this one doesn't work
+# for relightable 3D Gaussian
+python gui.py -m output/tnt/Barn/neilf -t neilf
