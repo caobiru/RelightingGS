@@ -32,9 +32,33 @@ def scene_composition(scene_dict: dict, dataset: ModelParams):
         gaussians.load_ply(scene_dict[scene]["path"])
 
         torch_transform = torch.tensor(scene_dict[scene]["transform"], device="cuda").reshape(4, 4)
-        gaussians.set_transform(transform=torch_transform)
+        print("Transform Matrix:\n", torch_transform)
 
-        gaussians_list.append(gaussians)
+        gaussians.set_transform(transform=torch_transform)
+        
+        
+        with torch.no_grad():
+            gaussians = GaussianModel(dataset.sh_degree, render_type="neilf")
+            gaussians.load_ply(scene_dict[scene]["path"])
+
+            # Apply only the transform from transform.json (e.g., for rotation)
+            torch_transform = torch.tensor(scene_dict[scene]["transform"], device="cuda").reshape(4, 4)
+            print("Transform Matrix:\n", torch_transform)
+
+            gaussians.set_transform(transform=torch_transform)
+
+            with torch.no_grad():
+                # Check the transformed world center without modifying the splat
+                xyz_local = gaussians.get_xyz
+                ones = torch.ones_like(xyz_local[:, :1])
+                xyz_homo = torch.cat([xyz_local, ones], dim=-1)
+                xyz_world = (xyz_homo @ torch_transform.T)[:, :3]
+                center_world = xyz_world.mean(dim=0)
+
+                print("Original Mean center (local):", xyz_local.mean(dim=0, keepdim=True).cpu().numpy())
+                print("Center in world space:", center_world.cpu().numpy())
+
+            gaussians_list.append(gaussians)
 
     gaussians_composite = GaussianModel.create_from_gaussians(gaussians_list, dataset)
     n = gaussians_composite.get_xyz.shape[0]
@@ -115,6 +139,14 @@ if __name__ == '__main__':
     light = EnvLight(path=args.envmap_path, scale=1)
     gaussians_composite = scene_composition(scene_dict, dataset)
 
+
+    # 👉 Print bounds and center of GS
+    xyz = gaussians_composite.get_xyz.detach().cpu().numpy()
+    print("Bounds (min):", xyz.min(axis=0))
+    print("Bounds (max):", xyz.max(axis=0))
+    print("Mean center:", xyz.mean(axis=0))
+
+
     # update visibility
     gaussians_composite.update_visibility(args.sample_num)
 
@@ -163,6 +195,16 @@ if __name__ == '__main__':
         custom_cam = Camera(colmap_id=0, R=R, T=T,
                             FoVx=fovx, FoVy=fovy, fx=None, fy=None, cx=None, cy=None,
                             image=torch.zeros(3, H, W), image_name=None, uid=0)
+        
+        # Estimate distance from camera to scene center
+        center = gaussians_composite.get_xyz.mean(dim=0).detach().cpu().numpy()  # Scene center
+        cam_position = -R.T @ T  # Camera position in world space
+        distance = np.linalg.norm(cam_position - center)
+        print(f"[Frame {idx}] Camera Position: {cam_position}, Scene Center: {center}, Distance: {distance:.2f}")
+
+
+        
+        
         if light_dict is not None:
             light.transform = torch.tensor(light_dict["transform"][idx], dtype=torch.float32, device="cuda").reshape(3, 3)
 
