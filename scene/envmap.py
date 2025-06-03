@@ -36,18 +36,27 @@ class EnvLight(torch.nn.Module):
         shape = dirs.shape
         dirs = dirs.reshape(-1, 3)
 
-        if transform is not None:
+        # Apply rotation matrix if provided from GUI
+        if hasattr(self, 'rotation_matrix') and self.rotation_matrix is not None:
+            dirs = dirs @ self.rotation_matrix.T
+        elif transform is not None:
             dirs = dirs @ transform.T
         elif self.transform is not None:
             dirs = dirs @ self.transform.T
 
-        envir_map =  self.envmap.permute(2, 0, 1).unsqueeze(0) # [1, 3, H, W]
-        phi = torch.arccos(dirs[:, 2]).reshape(-1) - 1e-6
-        theta = torch.atan2(dirs[:, 1], dirs[:, 0]).reshape(-1)
-        # normalize to [-1, 1]
+        envir_map = self.envmap.permute(2, 0, 1).unsqueeze(0)  # [1, 3, H, W]
+
+        # Clamp to avoid NaNs due to arccos precision issues
+        dirs_z = dirs[:, 2].clamp(-1.0, 1.0)
+        phi = torch.arccos(dirs_z) - 1e-6
+        theta = torch.atan2(dirs[:, 1], dirs[:, 0])
+
+        # Normalize spherical coords to [-1, 1] for grid_sample
         query_y = (phi / np.pi) * 2 - 1
-        query_x = - theta / np.pi
+        query_x = -theta / np.pi
         grid = torch.stack((query_x, query_y)).permute(1, 0).unsqueeze(0).unsqueeze(0)
+
         light_rgbs = F.grid_sample(envir_map, grid, align_corners=True).squeeze().permute(1, 0).reshape(-1, 3)
-    
+
         return light_rgbs.reshape(*shape)
+
